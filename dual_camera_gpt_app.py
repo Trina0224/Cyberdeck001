@@ -31,6 +31,9 @@ class DualCameraGPTApp:
         
         # Initialize the GPT conversation manager
         self.conversation_manager = ConversationManager()
+
+        # Bind Escape key
+        self.master.bind('<Escape>', self.stop_audio)
         
         # Create main UI
         self.create_ui()
@@ -67,7 +70,8 @@ class DualCameraGPTApp:
         # Status label for processing feedback
         self.status_label = ttk.Label(
             self.main_container,
-            text=""
+            text="",
+            font=('Arial', 10, 'bold')  # Make status more visible
         )
         self.status_label.pack(fill=tk.X, padx=5)
         
@@ -235,12 +239,14 @@ How can I help you today?
         while self.running:
             try:
                 frame = camera.capture_array("lores")
-                image = Image.fromarray(frame)
+                # Convert directly to PIL Image with correct color format
+                image = Image.fromarray(frame, 'RGBA').convert('RGB')
                 photo = ImageTk.PhotoImage(image)
                 preview_queue.put(photo)
             except Exception as e:
                 print(f"Error capturing preview from camera {camera_num}: {e}")
             self.master.after(10)
+
 
     def update_preview_canvases(self):
         try:
@@ -293,11 +299,15 @@ How can I help you today?
             image_path = CameraManager.capture_and_convert(self.picam2, 2)
         
         # Get response from GPT
-        response = self.conversation_manager.get_response(user_input)
+        response = self.conversation_manager.get_response(
+            user_input,
+            status_callback=self.update_status
+        )
         
-        # Display assistant response
+        # Display assistant response before TTS starts
         self.chat_display.insert(tk.END, f"\nAssistant: {response}\n")
         self.chat_display.see(tk.END)
+
         
         # Clear status
         self.update_status("")
@@ -315,4 +325,19 @@ How can I help you today?
         self.cleanup()
         self.master.quit()
         self.master.destroy()
+
+    def stop_audio(self, event=None):
+        """
+        Stop audio playback when Escape is pressed.
+        """
+        try:
+            self.conversation_manager.tts_manager.stop_playback()
+            self.update_status("")
+        except Exception as e:
+            print(f"Error stopping audio: {e}")
+            self.update_status("Error stopping audio")
+    
+        # Ensure the UI remains responsive
+        self.master.update()
+
 
