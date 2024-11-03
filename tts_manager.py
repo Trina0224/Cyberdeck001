@@ -57,7 +57,7 @@ class TTSManager:
             # Select voice based on language
             voice = "nova"  # Default voice
             if language == "ja":
-                voice = "shimizu"
+                voice = "nova"
             elif language == "zh":
                 voice = "nova"
             
