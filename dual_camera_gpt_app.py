@@ -7,14 +7,30 @@ import queue
 from collections import deque
 import datetime
 import os
+import sounddevice as sd
+import numpy as np
+from pydub import AudioSegment
 from conversation_manager import ConversationManager
 from camera_utils import CameraManager
+import time
+from pathlib import Path
+import opencc
 
 class DualCameraGPTApp:
     def __init__(self, master):
         self.master = master
         master.title("Dual Camera GPT Interface")
-        
+       
+        # Initialize converter before other components
+        self.converter = opencc.OpenCC('s2t')
+
+
+        # Initialize recording state
+        self.is_recording = False
+        self.recording_thread = None
+        self.audio_data = []
+        self.sample_rate = 44100
+
         # Initialize command history
         self.command_history = deque(maxlen=10)
         self.history_index = 0
@@ -118,6 +134,19 @@ class DualCameraGPTApp:
         self.button_frame = ttk.Frame(self.input_frame)
         self.button_frame.grid(row=0, column=1, sticky='e', padx=(5, 0))
         
+        # Record button (New) - Using tk.Button instead of ttk.Button for color support
+        self.record_button = tk.Button(
+            self.button_frame,
+            text="Record",
+            command=self.toggle_recording,
+            relief=tk.RAISED,  # Add relief to make it more visible
+            width=8,  # Set a fixed width
+            bg='light gray',
+            activebackground='gray'
+        )
+        self.record_button.pack(side=tk.LEFT, padx=2)
+
+
         # Buttons
         self.send_button = ttk.Button(
             self.button_frame, 
@@ -137,7 +166,21 @@ class DualCameraGPTApp:
         self.chat_input.bind("<Return>", lambda e: self.handle_input())
         self.chat_input.bind("<Up>", self.handle_up_key)
         self.chat_input.bind("<Down>", self.handle_down_key)
+        
+        # New keyboard shortcuts
+        # Bind to both the main window and chat_input to ensure they work regardless of focus
+        for widget in (self.master, self.chat_input):
+            widget.bind('r', lambda e: self.toggle_recording())
+            widget.bind('R', lambda e: self.toggle_recording())
+            widget.bind('s', lambda e: self.handle_input())
+            widget.bind('S', lambda e: self.handle_input())
+            widget.bind('e', lambda e: self.exit_program())
+            widget.bind('E', lambda e: self.exit_program())
 
+        # Update button text to show shortcuts
+        self.record_button.configure(text="Record (R)")
+        self.send_button.configure(text="Send (S)")
+        self.exit_button.configure(text="Exit (E)")
 
 
     def create_font_control(self):
@@ -211,6 +254,13 @@ and particularly with topics related to Christianity and the Bible.
 
 I can analyze images from two cameras - just mention 'camera 1' or 'camera 2' in your question.
 Type 'quit', 'exit', or 'bye' to end the program, or use the Exit button.
+
+Keyboard shortcuts:
+R - Toggle Recording
+S - Send Message
+E - Exit Program
+
+Esc - Stop GPT's talking.
 
 How can I help you today?
 """
@@ -325,6 +375,89 @@ How can I help you today?
         self.cleanup()
         self.master.quit()
         self.master.destroy()
+    
+
+    def toggle_recording(self):
+        if not self.is_recording:
+            # Start recording
+            self.is_recording = True
+            self.record_button.configure(bg='red', activebackground='dark red')
+            self.update_status("Recording audio...")
+            self.audio_data = []
+            self.recording_thread = threading.Thread(target=self.record_audio)
+            self.recording_thread.start()
+        else:
+            # Stop recording
+            self.is_recording = False
+            self.record_button.configure(bg='light gray', activebackground='gray')
+            self.update_status("Processing audio...")
+            if self.recording_thread:
+                self.recording_thread.join()
+            self.save_and_transcribe_audio()
+
+    def record_audio(self):
+        """Record audio in chunks while is_recording is True."""
+        try:
+            with sd.InputStream(channels=1, samplerate=self.sample_rate, dtype='float32') as stream:
+                while self.is_recording:
+                    audio_chunk, _ = stream.read(self.sample_rate)
+                    self.audio_data.append(audio_chunk)
+        except Exception as e:
+            print(f"Error recording audio: {e}")
+            self.update_status(f"Error recording audio: {e}")
+            self.is_recording = False
+            self.master.after(0, lambda: self.record_button.configure(
+                bg='light gray', 
+                activebackground='gray'
+            ))
+
+    def save_and_transcribe_audio(self):
+        """Save recorded audio to MP3 and transcribe it."""
+        try:
+            if not self.audio_data:
+                self.update_status("No audio recorded")
+                return
+
+            # Combine all audio chunks
+            combined_audio = np.concatenate(self.audio_data)
+            
+            # Convert to AudioSegment
+            audio_segment = AudioSegment(
+                (combined_audio * 32767).astype(np.int16).tobytes(),
+                frame_rate=self.sample_rate,
+                sample_width=2,
+                channels=1
+            )
+            
+            # Save as MP3
+            output_path = Path("/tmp") / f"recording_{int(time.time())}.mp3"
+            audio_segment.export(str(output_path), format="mp3")
+            
+            # Transcribe audio
+            self.update_status("Transcribing audio...")
+            with open(output_path, "rb") as audio_file:
+                transcription = self.conversation_manager.client.audio.transcriptions.create(
+                    model="whisper-1",
+                    file=audio_file
+                )
+            
+            # Convert to traditional Chinese if needed and display
+            transcribed_text = self.converter.convert(transcription.text)
+            self.chat_input.insert(0, transcribed_text)
+            self.update_status("")
+            
+            # Clean up
+            if output_path.exists():
+                os.remove(output_path)
+
+            # Automatically trigger send after a short delay (to ensure UI is updated)
+            self.master.after(200, self.handle_input) #delay 200ms to trigger the Send button
+
+            
+        except Exception as e:
+            print(f"Error processing audio: {e}")
+            self.update_status(f"Error processing audio: {e}")
+
 
     def stop_audio(self, event=None):
         """
@@ -339,5 +472,3 @@ How can I help you today?
     
         # Ensure the UI remains responsive
         self.master.update()
-
-
