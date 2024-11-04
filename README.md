@@ -24,6 +24,6 @@ python main.py
 
 ## Known Issues
 
-1. --Incorrect color rendering in the outputs of both cameras.--
+1. ~~Incorrect color rendering in the outputs of both cameras.~~
 2. Basic GUI design, which may affect the user experience.
 
