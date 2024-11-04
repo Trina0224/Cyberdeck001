@@ -10,12 +10,12 @@ class CameraManager:
         camera = Picamera2(camera_num=camera_num)
         
         preview_config = {
-            "format": "XRGB8888",  # Using XRGB8888 format for correct color
+            "format": "XBGR8888",  # Using XRGB8888 format for correct color
             "size": (640, 480)
         }
         
         camera_config = camera.create_preview_configuration(
-            main={"size": (3280, 2464), "format": "XRGB8888"},  # Using XRGB8888 for main capture too
+            main={"size": (3280, 2464), "format": "XBGR8888"},  # Using XRGB8888 for main capture too
             lores=preview_config
         )
         
