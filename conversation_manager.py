@@ -5,12 +5,22 @@ from typing import List, Dict, Callable
 import base64
 from tts_manager import TTSManager
 import re
+from typing import Tuple, Optional
+from camera_utils import CameraManager  # Add this import
+import datetime
+import os
+from pathlib import Path
+
 
 class ConversationManager:
     def __init__(self, api_key_path: str = "openai_key.txt"):
         self.converter = opencc.OpenCC('s2t')
         self.client = OpenAI(api_key=self.load_api_key(api_key_path))
         self.tts_manager = TTSManager(api_key_path)
+
+        # Initialize camera references
+        self.camera1 = None
+        self.camera2 = None
 
         self.camera_images = {
             "camera1": "camera1.jpg",
@@ -29,6 +39,71 @@ class ConversationManager:
                 in the same language as the user's query."""
             }
         ]
+
+        # Add command patterns for different languages
+        self.photo_commands = {
+            'camera1': [
+                r'take photo from camera ?1',  # English
+                r'camera ?1で写真を撮って',    # Japanese
+                r'用camera ?一拍照',           # Traditional Chinese
+                r'用camera ?一拍照',           # Traditional Chinese
+                r'從camera ?1拍照',           # Traditional Chinese alternative
+                r'從camera ?1拍照',           # Traditional Chinese alternative
+            ],
+            'camera2': [
+                r'take photo from camera ?2',  # English
+                r'camera ?2で写真を撮って',    # Japanese
+                r'用camera ?二拍照',           # Traditional Chinese
+                r'用camera ?二拍照',           # Traditional Chinese
+                r'從camera ?2拍照',           # Traditional Chinese alternative
+                r'從camera ?2拍照',           # Traditional Chinese alternative
+            ],
+            'what_is_this': [
+                r'what is this\??',           # English
+                r'これは何\??',               # Japanese
+                r'這是什麼\??',               # Traditional Chinese
+            ],
+            'what_is_that': [
+                r'what is that\??',           # English
+                r'あれは何\??',               # Japanese
+                r'それは何\??',               # Japanese
+                r'那是什麼\??',               # Traditional Chinese
+            ]
+        }
+
+    def set_cameras(self, camera1: 'Picamera2', camera2: 'Picamera2'):
+        """Set camera references from the main app"""
+        self.camera1 = camera1
+        self.camera2 = camera2
+
+    def parse_command(self, text: str) -> Tuple[str, Optional[str]]:
+        """
+        Parse the input text to determine command type and camera number
+        Returns: (command_type, camera_number or None)
+        command_type can be: 'take_photo', 'analyze', 'normal'
+        """
+        text = text.lower().strip()
+        
+        # Check for photo commands
+        for camera, patterns in self.photo_commands.items():
+            if any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns):
+                if camera == 'camera1':
+                    return 'take_photo', '1'
+                elif camera == 'camera2':
+                    return 'take_photo', '2'
+                elif camera == 'what_is_this':
+                    return 'analyze', '2'  # "this" refers to camera 2
+                elif camera == 'what_is_that':
+                    return 'analyze', '1'  # "that" refers to camera 1
+        
+        # Check for analysis commands (original camera 1/2 mentions)
+        if "camera 1" in text or "front camera" in text:
+            return 'analyze', '1'
+        elif "camera 2" in text or "rear camera" in text:
+            return 'analyze', '2'
+        
+        return 'normal', None
+
 
     def load_api_key(self, filepath: str) -> str:
         try:
@@ -82,40 +157,61 @@ class ConversationManager:
         # Default to English
         return 'en'
 
-    #def get_response(self, user_input: str) -> str:
     def get_response(self, user_input: str, status_callback: Callable[[str], None] = None) -> str:
         try:
-            # Existing code for getting response
-            image_path = None
-            if "camera 1" in user_input.lower() or "front camera" in user_input.lower():
-                image_path = self.camera_images["camera1"]
-            elif "camera 2" in user_input.lower() or "rear camera" in user_input.lower():
-                image_path = self.camera_images["camera2"]
+            command_type, camera_num = self.parse_command(user_input)
 
-            self.add_message("user", user_input, image_path)
-            
-            model = "gpt-4o-mini" if image_path else "gpt-4o"
-            
+            if command_type == 'take_photo':
+                # Just take and save high-res photo, no GPT analysis
+                if camera_num == '1' and self.camera1:
+                    filepath = CameraManager.capture_high_res(self.camera1, 1)
+                elif camera_num == '2' and self.camera2:
+                    filepath = CameraManager.capture_high_res(self.camera2, 2)
+                else:
+                    return "Error: Camera not initialized"
+
+                if filepath:
+                    return f"Photo saved to: {filepath}"
+                return "Error taking photo"
+
+            elif command_type == 'analyze':
+                # Take photo and analyze with GPT
+                if camera_num == '1' and self.camera1:
+                    image_path = CameraManager.capture_and_convert(self.camera1, 1)
+                elif camera_num == '2' and self.camera2:
+                    image_path = CameraManager.capture_and_convert(self.camera2, 2)
+                else:
+                    return "Error: Camera not initialized"
+
+                # Add image to conversation and get GPT response
+                self.add_message("user", user_input, image_path)
+                # Use gpt-4o-mini for image analysis
+                model = "gpt-4o-mini"
+            else:
+                # Normal conversation without images
+                self.add_message("user", user_input)
+                # Use gpt-4o for text-only conversations
+                model = "gpt-4o"
+
+            # Get GPT response
             response = self.client.chat.completions.create(
                 model=model,
                 messages=self.conversation_history,
                 temperature=0.7,
                 max_tokens=1000
             )
-            
+
             assistant_response = response.choices[0].message.content
             self.add_message("assistant", assistant_response)
-            
-            # Detect language and convert to speech
+
+            # Handle text-to-speech
             language = self.detect_language(assistant_response)
-            # Start TTS conversion in background after displaying text
             self.tts_manager.text_to_speech(
                 assistant_response,
                 language,
                 status_callback
             )
-            #self.tts_manager.text_to_speech(assistant_response, language)
-            
+
             return assistant_response
 
         except Exception as e:

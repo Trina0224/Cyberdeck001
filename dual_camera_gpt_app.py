@@ -42,11 +42,17 @@ class DualCameraGPTApp:
         # Initialize preview update flags
         self.running = True
         
-        # Initialize cameras
-        self.setup_cameras()
+        ## Initialize cameras
+        #self.setup_cameras()
         
         # Initialize the GPT conversation manager
         self.conversation_manager = ConversationManager()
+
+        # Initialize cameras
+        self.setup_cameras()
+        
+        # Pass camera references to conversation manager
+        self.conversation_manager.set_cameras(self.picam1, self.picam2)
 
         # Bind Escape key
         self.master.bind('<Escape>', self.stop_audio)
@@ -451,7 +457,7 @@ How can I help you today?
                 os.remove(output_path)
 
             # Automatically trigger send after a short delay (to ensure UI is updated)
-            self.master.after(200, self.handle_input) #delay 200ms to trigger the Send button
+            self.master.after(100, self.handle_input) #delay 100ms to trigger the Send button
 
             
         except Exception as e:

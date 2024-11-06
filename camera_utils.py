@@ -3,20 +3,28 @@ from picamera2 import Picamera2
 from PIL import Image
 import datetime
 import os
+from pathlib import Path
 
 class CameraManager:
     @staticmethod
     def setup_camera(camera_num: int) -> Picamera2:
         camera = Picamera2(camera_num=camera_num)
         
+        # Configure preview and main streams properly
         preview_config = {
-            "format": "XBGR8888",  # Using XRGB8888 format for correct color
-            "size": (640, 480)
+            "size": (640, 480),
+            "format": "XBGR8888"
         }
         
+        still_config = {
+            "size": (1640, 1232),
+            "format": "XBGR8888"
+        }
+        
+        # Create configuration with both preview and still capture settings
         camera_config = camera.create_preview_configuration(
-            main={"size": (3280, 2464), "format": "XBGR8888"},  # Using XRGB8888 for main capture too
-            lores=preview_config
+            main=still_config,  # For still capture
+            lores=preview_config  # For preview
         )
         
         camera.configure(camera_config)
@@ -24,30 +32,91 @@ class CameraManager:
         return camera
 
     @staticmethod
+    def capture_high_res(camera: Picamera2, camera_num: int) -> str:
+        """Capture high resolution image and save to Pictures folder"""
+        try:
+            # Create high-res configuration
+            high_res_config = camera.create_still_configuration(
+                main={"size": (3280, 2464), "format": "XBGR8888"}
+            )
+            
+            # Stop current preview to avoid conflicts
+            camera.stop()
+            
+            # Configure for high-res capture
+            camera.configure(high_res_config)
+            camera.start()
+            
+            # Take the picture
+            image_array = camera.capture_array()
+            img = Image.fromarray(image_array, 'RGBA').convert('RGB')
+            
+            # Create timestamp and filename
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            pictures_dir = str(Path.home() / "Pictures")
+            os.makedirs(pictures_dir, exist_ok=True)
+            filename = f"Camera{camera_num}_{timestamp}.jpg"
+            filepath = os.path.join(pictures_dir, filename)
+            
+            # Save image
+            img.save(filepath, "JPEG", quality=95)
+            
+            # Stop camera before reconfiguring
+            camera.stop()
+            
+            # Reconfigure for preview mode
+            preview_config = camera.create_preview_configuration(
+                main={"size": (1640, 1232), "format": "XBGR8888"},
+                lores={"size": (640, 480), "format": "XBGR8888"}
+            )
+            camera.configure(preview_config)
+            camera.start()
+            
+            return filepath
+            
+        except Exception as e:
+            print(f"Error in high-res capture: {e}")
+            # Ensure camera is reconfigured even if there's an error
+            try:
+                camera.stop()
+                preview_config = camera.create_preview_configuration(
+                    main={"size": (1640, 1232), "format": "XBGR8888"},
+                    lores={"size": (640, 480), "format": "XBGR8888"}
+                )
+                camera.configure(preview_config)
+                camera.start()
+            except Exception as config_error:
+                print(f"Error reconfiguring camera: {config_error}")
+            return None
+
+    @staticmethod
     def capture_and_convert(camera: Picamera2, camera_num: int) -> str:
-        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        """Capture image and convert to 512x512 for GPT usage"""
         final_path = f"camera{camera_num}.jpg"
         
         try:
-            # Capture image directly as RGB format
+            # Use main stream for capture (1640x1232)
             image_array = camera.capture_array()
+            img = Image.fromarray(image_array, 'RGBA').convert('RGB')
             
-            # Convert to PIL Image
-            img = Image.fromarray(image_array, 'RGBA').convert('RGB')  # Convert XRGB to RGB
+            # Calculate aspect ratio preserving resize dimensions
+            aspect_ratio = img.width / img.height
+            if aspect_ratio > 1:
+                resize_width = int(512 * aspect_ratio)
+                resize_height = 512
+            else:
+                resize_width = 512
+                resize_height = int(512 / aspect_ratio)
             
-            # Resize to maintain aspect ratio, fitting within 683x512
-            img = img.resize((683, 512), Image.Resampling.LANCZOS)
+            # Resize maintaining aspect ratio
+            img = img.resize((resize_width, resize_height), Image.Resampling.LANCZOS)
             
-            # Calculate the coordinates for cropping the center 512x512 area
-            left = (683 - 512) // 2
-            top = 0
-            right = left + 512
-            bottom = 512
-            img = img.crop((left, top, right, bottom))
+            # Crop to center 512x512
+            left = (resize_width - 512) // 2
+            top = (resize_height - 512) // 2
+            img = img.crop((left, top, left + 512, top + 512))
             
-            # Save as JPEG
             img.save(final_path, "JPEG", quality=90)
-            
             return final_path
             
         except Exception as e:
