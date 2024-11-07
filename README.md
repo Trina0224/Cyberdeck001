@@ -32,3 +32,8 @@ python main.py
 ## Release Info  
 v0.5.0  It's a full function chat Interface and only support chatGPT.  
 
+## Models  
+OpenAI:  gpt-4o-mini, gpt-4o  
+Claude:  claude-3-5-sonnet-20241022  
+
+
