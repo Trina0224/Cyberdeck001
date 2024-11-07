@@ -3,7 +3,9 @@
 ## Initial Setup
 
 1. Create a file named `openai_key.txt` in the working directory.
-2. Paste your OpenAI API key into `openai_key.txt`.
+2. Paste your OpenAI API key into `openai_key.txt`.  
+3. For Claude, create a new file called `anthropic_key.txt` and paste the key into it.  
+
 
 ## Running the Program
 
