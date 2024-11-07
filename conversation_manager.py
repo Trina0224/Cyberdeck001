@@ -6,17 +6,23 @@ import base64
 from tts_manager import TTSManager
 import re
 from typing import Tuple, Optional
-from camera_utils import CameraManager  # Add this import
+from camera_utils import CameraManager
 import datetime
 import os
 from pathlib import Path
-
+from key_manager import KeyManager
+from chatgpt import ChatGPTModel
+from typing import Union
 
 class ConversationManager:
     def __init__(self, api_key_path: str = "openai_key.txt"):
         self.converter = opencc.OpenCC('s2t')
-        self.client = OpenAI(api_key=self.load_api_key(api_key_path))
-        self.tts_manager = TTSManager(api_key_path)
+        # Initialize OpenAI client for speech services
+        self.client = OpenAI(api_key=KeyManager.load_key("openai"))
+        self.tts_manager = TTSManager(KeyManager.get_key_path("openai"))
+
+        # Initialize current AI model (default to ChatGPT)
+        self.current_model = ChatGPTModel()
 
         # Initialize camera references
         self.camera1 = None
@@ -71,6 +77,37 @@ class ConversationManager:
             ]
         }
 
+    def set_ai_model(self, model_name: str) -> None:
+        """Change the current AI model"""
+        try:
+            print(f"[DEBUG] Attempting to switch to {model_name}")
+            if model_name == "ChatGPT":
+                self.current_model = ChatGPTModel()
+                print(f"[DEBUG] Created new ChatGPT model instance: {type(self.current_model)}")
+            elif model_name == "Claude":
+                from claude import ClaudeModel
+                self.current_model = ClaudeModel()
+                self.clear_history()
+                print(f"[DEBUG] Created new Claude model instance: {type(self.current_model)}")
+            elif model_name == "Gemini":
+                from gemini import GeminiModel
+                self.current_model = GeminiModel()
+                self.clear_history()
+                print(f"[DEBUG] Created new Gemini model instance: {type(self.current_model)}")
+            elif model_name == "Grok":
+                from grok import GrokModel
+                self.current_model = GrokModel()
+                self.clear_history()
+                print(f"[DEBUG] Created new Grok model instance: {type(self.current_model)}")
+            else:
+                raise ValueError(f"Unsupported model: {model_name}")
+
+            print(f"[DEBUG] Current model after switch: {self.current_model.get_model_name()}")
+        except Exception as e:
+            print(f"[DEBUG] Error during model switch: {str(e)}")
+            raise Exception(f"Error switching to {model_name}: {e}")
+
+
     def set_cameras(self, camera1: 'Picamera2', camera2: 'Picamera2'):
         """Set camera references from the main app"""
         self.camera1 = camera1
@@ -104,14 +141,6 @@ class ConversationManager:
         
         return 'normal', None
 
-
-    def load_api_key(self, filepath: str) -> str:
-        try:
-            with open(filepath, "r") as file:
-                return file.read().strip()
-        except FileNotFoundError:
-            raise Exception(f"API key file not found at {filepath}")
-
     def encode_image_to_base64(self, image_path: str) -> str:
         try:
             with open(image_path, "rb") as image_file:
@@ -119,7 +148,7 @@ class ConversationManager:
         except FileNotFoundError:
             raise Exception(f"Image file not found: {image_path}")
 
-    def add_message(self, role: str, content: str, image_path: str = None) -> None:
+    def add_message(self, role: str, content: Union[str, List], image_path: str = None) -> None:
         if image_path:
             image_base64 = self.encode_image_to_base64(image_path)
             content_with_image = {
@@ -139,7 +168,6 @@ class ConversationManager:
         else:
             self.conversation_history.append({"role": role, "content": content})
 
-
     def clear_history(self) -> None:
         self.conversation_history = [self.conversation_history[0]]
     
@@ -157,12 +185,18 @@ class ConversationManager:
         # Default to English
         return 'en'
 
+
     def get_response(self, user_input: str, status_callback: Callable[[str], None] = None) -> str:
         try:
+            
+            print(f"[DEBUG] Current model before getting response: {self.current_model.get_model_name()}")
+            print(f"[DEBUG] Current model type: {type(self.current_model)}")
+
             command_type, camera_num = self.parse_command(user_input)
+            image_path = None
 
             if command_type == 'take_photo':
-                # Just take and save high-res photo, no GPT analysis
+                # Just take and save high-res photo, no AI analysis
                 if camera_num == '1' and self.camera1:
                     filepath = CameraManager.capture_high_res(self.camera1, 1)
                 elif camera_num == '2' and self.camera2:
@@ -175,7 +209,7 @@ class ConversationManager:
                 return "Error taking photo"
 
             elif command_type == 'analyze':
-                # Take photo and analyze with GPT
+                # Take photo and analyze
                 if camera_num == '1' and self.camera1:
                     image_path = CameraManager.capture_and_convert(self.camera1, 1)
                 elif camera_num == '2' and self.camera2:
@@ -183,38 +217,43 @@ class ConversationManager:
                 else:
                     return "Error: Camera not initialized"
 
-                # Add image to conversation and get GPT response
+            # Add message to conversation history
+            if image_path:
                 self.add_message("user", user_input, image_path)
-                # Use gpt-4o-mini for image analysis
-                model = "gpt-4o-mini"
             else:
-                # Normal conversation without images
                 self.add_message("user", user_input)
-                # Use gpt-4o for text-only conversations
-                model = "gpt-4o"
 
-            # Get GPT response
-            response = self.client.chat.completions.create(
-                model=model,
-                messages=self.conversation_history,
-                temperature=0.7,
-                max_tokens=1000
+            # Determine which model to use based on the current AI model
+            if isinstance(self.current_model, ChatGPTModel):
+                model = "gpt-4o-mini" if image_path else "gpt-4o"
+                print(f"[DEBUG] Using ChatGPT model: {model}")
+            else:
+                # Other models don't use the same model names
+                model = None
+                print(f"[DEBUG] Using {self.current_model.get_model_name()} with its own model naming")
+            # Get response from current AI model
+            print(f"[DEBUG] Generating response using {self.current_model.get_model_name()}")
+            response = self.current_model.generate_response(
+                self.conversation_history,
+                model,
+                image_path
             )
 
-            assistant_response = response.choices[0].message.content
-            self.add_message("assistant", assistant_response)
+            # Add response to conversation history
+            self.add_message("assistant", response)
 
             # Handle text-to-speech
-            language = self.detect_language(assistant_response)
+            language = self.detect_language(response)
             self.tts_manager.text_to_speech(
-                assistant_response,
+                response,
                 language,
                 status_callback
             )
 
-            return assistant_response
+            return response
 
         except Exception as e:
+            print(f"[DEBUG] Error in get_response: {str(e)}")
             error_message = f"Error: {str(e)}"
             if status_callback:
                 status_callback(error_message)

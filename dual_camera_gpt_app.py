@@ -75,106 +75,126 @@ class DualCameraGPTApp:
             print(f"Error setting up cameras: {e}")
     
     def create_ui(self):
+        # Create horizontal container for main content and model selection
+        self.horizontal_container = ttk.Frame(self.master)
+        self.horizontal_container.pack(fill=tk.BOTH, expand=True)
+
         # Create main container
-        self.main_container = ttk.Frame(self.master)
-        self.main_container.pack(fill=tk.BOTH, expand=True)
-        
+        self.main_container = ttk.Frame(self.horizontal_container)
+        self.main_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        # Create model selection frame on the right
+        self.model_frame = ttk.LabelFrame(self.horizontal_container, text="AI Model")
+        self.model_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+
+        # Add radio buttons for model selection
+        self.model_var = tk.StringVar(value="ChatGPT")  # Default selection
+        models = ["ChatGPT", "Claude", "Gemini", "Grok"]
+
+        for model in models:
+            radio = ttk.Radiobutton(
+                self.model_frame,
+                text=model,
+                variable=self.model_var,
+                value=model,
+                command=self.on_model_change
+            )
+            radio.pack(padx=5, pady=2, anchor=tk.W)
+
         # Create font size control frame
         self.create_font_control()
-        
+
         # Create frames for organization
         self.camera_frame = ttk.Frame(self.main_container)
         self.camera_frame.pack(side=tk.TOP, fill=tk.X)
-        
+
         self.chat_frame = ttk.Frame(self.main_container)
         self.chat_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        
+
         # Status label for processing feedback
         self.status_label = ttk.Label(
             self.main_container,
             text="",
-            font=('Arial', 10, 'bold')  # Make status more visible
+            font=('Arial', 10, 'bold')
         )
         self.status_label.pack(fill=tk.X, padx=5)
-        
+
         # Camera previews
         self.preview1_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
         self.preview1_canvas.pack(side=tk.LEFT, padx=5)
-        
+
         self.preview2_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
         self.preview2_canvas.pack(side=tk.LEFT, padx=5)
-        
+
         # Create a frame for chat display and input
         chat_container = ttk.Frame(self.chat_frame)
         chat_container.pack(fill=tk.BOTH, expand=True)
-        
+
         # Configure grid weights for chat container
         chat_container.grid_columnconfigure(0, weight=1)
         chat_container.grid_rowconfigure(0, weight=1)
-        chat_container.grid_rowconfigure(1, weight=0)  # Input row doesn't expand
-        
+        chat_container.grid_rowconfigure(1, weight=0)
+
         # Chat display with font settings
         self.chat_display = scrolledtext.ScrolledText(
-            chat_container, 
-            wrap=tk.WORD, 
+            chat_container,
+            wrap=tk.WORD,
             font=self.chat_font
         )
         self.chat_display.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
-        
+
         # Input frame
         self.input_frame = ttk.Frame(chat_container)
         self.input_frame.grid(row=1, column=0, sticky='ew', padx=5, pady=5)
-        
+
         # Configure input frame grid
         self.input_frame.grid_columnconfigure(0, weight=1)
         self.input_frame.grid_columnconfigure(1, weight=0)
-        
+
         # Chat input
         self.chat_input = ttk.Entry(
             self.input_frame,
             font=self.chat_font
         )
         self.chat_input.grid(row=0, column=0, sticky='ew')
-        
+
         # Button frame
         self.button_frame = ttk.Frame(self.input_frame)
         self.button_frame.grid(row=0, column=1, sticky='e', padx=(5, 0))
-        
-        # Record button (New) - Using tk.Button instead of ttk.Button for color support
+
+        # Record button
         self.record_button = tk.Button(
             self.button_frame,
-            text="Record",
+            text="Record (R)",
             command=self.toggle_recording,
-            relief=tk.RAISED,  # Add relief to make it more visible
-            width=8,  # Set a fixed width
+            relief=tk.RAISED,
+            width=8,
             bg='light gray',
             activebackground='gray'
         )
         self.record_button.pack(side=tk.LEFT, padx=2)
 
-
-        # Buttons
+        # Send and Exit buttons
         self.send_button = ttk.Button(
-            self.button_frame, 
-            text="Send", 
+            self.button_frame,
+            text="Send (S)",
             command=self.handle_input
         )
         self.send_button.pack(side=tk.LEFT, padx=2)
-        
+
         self.exit_button = ttk.Button(
-            self.button_frame, 
-            text="Exit", 
+            self.button_frame,
+            text="Exit (E)",
             command=self.exit_program
         )
         self.exit_button.pack(side=tk.LEFT, padx=2)
-        
+
         # Bind keys
         self.chat_input.bind("<Return>", lambda e: self.handle_input())
         self.chat_input.bind("<Up>", self.handle_up_key)
         self.chat_input.bind("<Down>", self.handle_down_key)
-        
-        # New keyboard shortcuts
-        # Bind to both the main window and chat_input to ensure they work regardless of focus
+
+        # Keyboard shortcuts
         for widget in (self.master, self.chat_input):
             widget.bind('r', lambda e: self.toggle_recording())
             widget.bind('R', lambda e: self.toggle_recording())
@@ -182,12 +202,19 @@ class DualCameraGPTApp:
             widget.bind('S', lambda e: self.handle_input())
             widget.bind('e', lambda e: self.exit_program())
             widget.bind('E', lambda e: self.exit_program())
+    
 
-        # Update button text to show shortcuts
-        self.record_button.configure(text="Record (R)")
-        self.send_button.configure(text="Send (S)")
-        self.exit_button.configure(text="Exit (E)")
-
+    def on_model_change(self):
+        """Handle AI model selection change"""
+        selected_model = self.model_var.get()
+        print(f"[DEBUG] Model selection changed in UI to: {selected_model}")
+        try:
+            self.conversation_manager.set_ai_model(selected_model)
+            self.update_status(f"Switched to {selected_model}")
+            print(f"[DEBUG] Successfully switched conversation manager to {selected_model}")
+        except Exception as e:
+            print(f"[DEBUG] Error switching model in UI: {str(e)}")
+            self.update_status(f"Error switching to {selected_model}: {str(e)}")
 
     def create_font_control(self):
         # Create frame for font size control
