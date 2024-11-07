@@ -27,3 +27,6 @@ python main.py
 1. ~~Incorrect color rendering in the outputs of both cameras.~~
 2. Basic GUI design, which may affect the user experience.
 
+## Release Info  
+v0.5.0  It's a full function chat Interface and only support chatGPT.  
+
