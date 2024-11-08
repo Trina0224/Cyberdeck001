@@ -7,6 +7,30 @@
 3. For Claude, create a new file called `anthropic_key.txt` and paste the key into it.  
 4. For Gemini, create a new file named `google_key.txt` and paste the key into it.  
 
+## Requirements  
+(--break-system-packages may need, if no virtual env. )  
+
+```bash  
+pip install -r requirements.txt  
+```  
+  
+If you would like to have the exactlly reversions I am using:  
+  
+```bash  
+pip install -r requirements_fix.txt  
+```  
+
+Somehthing you may need to install:  
+
+```bash  
+# For Debian/Ubuntu
+sudo apt-get update
+sudo apt-get install -y \
+    python3-tk \
+    portaudio19-dev \
+    python3-pil.imagetk
+```  
+
 
 ## Running the Program
 
