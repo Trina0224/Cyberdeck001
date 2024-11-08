@@ -192,7 +192,9 @@ class ConversationManager:
             print(f"[DEBUG] Current model before getting response: {self.current_model.get_model_name()}")
             print(f"[DEBUG] Current model type: {type(self.current_model)}")
 
+            print(f"[DEBUG] Processing input: {user_input}")
             command_type, camera_num = self.parse_command(user_input)
+            print(f"[DEBUG] Parsed command: type={command_type}, camera={camera_num}")
             image_path = None
 
             if command_type == 'take_photo':

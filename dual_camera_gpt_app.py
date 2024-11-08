@@ -165,7 +165,7 @@ class DualCameraGPTApp:
         # Record button
         self.record_button = tk.Button(
             self.button_frame,
-            text="Record (R)",
+            text="Record (`)",
             command=self.toggle_recording,
             relief=tk.RAISED,
             width=8,
@@ -177,14 +177,14 @@ class DualCameraGPTApp:
         # Send and Exit buttons
         self.send_button = ttk.Button(
             self.button_frame,
-            text="Send (S)",
+            text="Send",
             command=self.handle_input
         )
         self.send_button.pack(side=tk.LEFT, padx=2)
 
         self.exit_button = ttk.Button(
             self.button_frame,
-            text="Exit (E)",
+            text="Exit (ctrl+Q)",
             command=self.exit_program
         )
         self.exit_button.pack(side=tk.LEFT, padx=2)
@@ -196,12 +196,12 @@ class DualCameraGPTApp:
 
         # Keyboard shortcuts
         for widget in (self.master, self.chat_input):
-            widget.bind('r', lambda e: self.toggle_recording())
-            widget.bind('R', lambda e: self.toggle_recording())
-            widget.bind('s', lambda e: self.handle_input())
-            widget.bind('S', lambda e: self.handle_input())
-            widget.bind('e', lambda e: self.exit_program())
-            widget.bind('E', lambda e: self.exit_program())
+            widget.bind('`', lambda e: self.toggle_recording())
+            #widget.bind('R', lambda e: self.toggle_recording())
+            #widget.bind('s', lambda e: self.handle_input())
+            #widget.bind('S', lambda e: self.handle_input())
+            widget.bind('<Control-q>', lambda e: self.exit_program())
+            #widget.bind('E', lambda e: self.exit_program())
     
 
     def on_model_change(self):
@@ -289,9 +289,9 @@ I can analyze images from two cameras - just mention 'camera 1' or 'camera 2' in
 Type 'quit', 'exit', or 'bye' to end the program, or use the Exit button.
 
 Keyboard shortcuts:
-R - Toggle Recording
-S - Send Message
-E - Exit Program
+` (Backtick) - Toggle Recording
+Enter/Return - Send Message
+Ctrl+Q  - Exit Program
 
 Esc - Stop GPT's talking.
 
