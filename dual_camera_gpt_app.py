@@ -39,6 +39,18 @@ class DualCameraGPTApp:
         self.current_font_size = 12
         self.chat_font = font.Font(size=self.current_font_size)
         
+        # Define color schemes for different participants
+        self.chat_colors = {
+            'human': '#666666',      # Subtle gray for human
+            'ChatGPT': '#10a37f',    # OpenAI green
+            'Claude': '#7C3AED',     # Purple for Claude
+            'Gemini': '#1A73E8',     # Google blue
+            'Grok': '#1DA1F2'        # Twitter/X blue
+        }
+        
+        # Configure text tags for colors
+        #self.setup_text_tags()
+
         # Initialize preview update flags
         self.running = True
         
@@ -59,6 +71,9 @@ class DualCameraGPTApp:
         
         # Create main UI
         self.create_ui()
+        
+        # Now we can setup text tags after chat_display is created
+        self.setup_text_tags()
         
         # Start the preview loops in separate threads
         self.start_preview_threads()
@@ -253,6 +268,9 @@ class DualCameraGPTApp:
         self.chat_font.configure(size=new_size)
         self.font_size_label.configure(text=str(new_size))
         
+        # Update text tags with new font size
+        self.setup_text_tags()
+        
         # Update font for both chat display and input area
         self.chat_display.configure(font=self.chat_font)
         self.chat_input.configure(font=self.chat_font)
@@ -365,15 +383,22 @@ How can I help you today?
         self.chat_input.delete(0, tk.END)
         
         # Display user input
-        self.chat_display.insert(tk.END, f"\nYou: {user_input}\n")
-        self.chat_display.see(tk.END)
-        
+        #self.chat_display.insert(tk.END, f"\nYou: {user_input}\n")
+        #self.chat_display.see(tk.END)
+        # Display user input with color
+        self.insert_colored_message("human", user_input)
+
         # Check for exit commands
         if user_input.lower() in ['quit', 'exit', 'bye']:
             self.exit_program()
             return
+    
+        # Get current model name
+        current_model = self.conversation_manager.current_model.get_model_name()
         
+
         # Check if we need to capture from either camera
+        image_path = None
         if "camera 1" in user_input.lower() or "front camera" in user_input.lower():
             self.update_status("Processing image from Camera 1... Please wait.")
             image_path = CameraManager.capture_and_convert(self.picam1, 1)
@@ -387,9 +412,16 @@ How can I help you today?
             status_callback=self.update_status
         )
         
+        # Display assistant response with model-specific prefix
+        #self.chat_display.insert(tk.END, f"\n{current_model}: {response}\n")
+        #self.chat_display.see(tk.END)
+
         # Display assistant response before TTS starts
-        self.chat_display.insert(tk.END, f"\nAssistant: {response}\n")
-        self.chat_display.see(tk.END)
+        #self.chat_display.insert(tk.END, f"\nAssistant: {response}\n")
+        #self.chat_display.see(tk.END)
+        
+        # Display AI response with appropriate color
+        self.insert_colored_message(current_model, response)
 
         
         # Clear status
@@ -505,3 +537,41 @@ How can I help you today?
     
         # Ensure the UI remains responsive
         self.master.update()
+
+    def setup_text_tags(self):
+        """Configure text tags for color coding messages"""
+        for participant, color in self.chat_colors.items():
+            self.chat_display.tag_configure(
+                participant,
+                foreground=color,
+                font=(self.chat_font.actual('family'),
+                      self.chat_font.actual('size'),
+                      'bold')  # Make speaker names bold
+            )
+            # Add a tag for the message text itself (not bold)
+            self.chat_display.tag_configure(
+                f"{participant}_text",
+                foreground=color,
+                font=(self.chat_font.actual('family'),
+                      self.chat_font.actual('size'))
+            )
+
+    def insert_colored_message(self, speaker: str, message: str):
+        """Insert a color-coded message into the chat display"""
+        # Get the appropriate color tag
+        tag = speaker if speaker in self.chat_colors else 'human'
+
+        # Insert speaker label with bold colored font
+        if speaker == "human":
+            speaker_text = "You: "
+        else:
+            speaker_text = f"{speaker}: "
+
+        self.chat_display.insert(tk.END, f"\n{speaker_text}", tag)
+
+        # Insert message with colored but not bold font
+        self.chat_display.insert(tk.END, f"{message}\n", f"{tag}_text")
+
+        # Ensure the latest message is visible
+        self.chat_display.see(tk.END)
+
