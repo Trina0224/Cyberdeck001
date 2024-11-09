@@ -63,6 +63,7 @@ v0.5.0  It's a full function chat Interface and only support chatGPT.
 OpenAI:  gpt-4o-mini, gpt-4o  
 Claude:  claude-3-5-sonnet-20241022  
 Gemini:  gemini-1.5-flash  
+Grok:  grok-demo  (Released on Nov/04th/2024, image support will be released later. No python lib required.)
 
 
 
