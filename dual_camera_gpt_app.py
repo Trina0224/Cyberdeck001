@@ -82,12 +82,36 @@ class DualCameraGPTApp:
         self.display_welcome_message()
 
     def setup_cameras(self):
+        """Setup available cameras and adjust UI accordingly"""
+        self.available_cameras = CameraManager.detect_cameras()
+        print(f"[DEBUG] Available cameras: {self.available_cameras}")
+        
+        self.picam1 = None
+        self.picam2 = None
+        
         try:
-            self.picam1 = CameraManager.setup_camera(0)
-            self.picam2 = CameraManager.setup_camera(1)
-            print("Cameras initialized successfully")
+            if 0 in self.available_cameras:
+                self.picam1 = CameraManager.setup_camera(0)
+                print("[DEBUG] Camera 1 initialized")
+            elif 1 in self.available_cameras:
+                # If only camera 2 is available, treat it as camera 1
+                self.picam1 = CameraManager.setup_camera(1)
+                print("[DEBUG] Only Camera 2 found, using as Camera 1")
+                
+            if 1 in self.available_cameras and 0 in self.available_cameras:
+                self.picam2 = CameraManager.setup_camera(1)
+                print("[DEBUG] Camera 2 initialized")
+                
         except Exception as e:
-            print(f"Error setting up cameras: {e}")
+            print(f"[DEBUG] Error setting up cameras: {e}")
+
+    #def setup_cameras(self):
+    #    try:
+    #        self.picam1 = CameraManager.setup_camera(0)
+    #        self.picam2 = CameraManager.setup_camera(1)
+    #        print("Cameras initialized successfully")
+    #    except Exception as e:
+    #        print(f"Error setting up cameras: {e}")
     
     def create_ui(self):
         # Create horizontal container for main content and model selection
@@ -120,8 +144,29 @@ class DualCameraGPTApp:
         self.create_font_control()
 
         # Create frames for organization
-        self.camera_frame = ttk.Frame(self.main_container)
-        self.camera_frame.pack(side=tk.TOP, fill=tk.X)
+        if self.picam1 or self.picam2:
+            self.camera_frame = ttk.Frame(self.main_container)
+            self.camera_frame.pack(side=tk.TOP, fill=tk.X)
+            
+            if self.picam1:
+                self.preview1_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
+                if len(self.available_cameras) == 1:
+                    # If only one camera, let it take full width
+                    self.preview1_canvas.pack(side=tk.TOP, padx=5, expand=True)
+                else:
+                    self.preview1_canvas.pack(side=tk.LEFT, padx=5)
+                
+            if self.picam2:
+                self.preview2_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
+                self.preview2_canvas.pack(side=tk.LEFT, padx=5)
+        else:
+            # No cameras available - show message
+            no_camera_label = ttk.Label(
+                self.main_container,
+                text="No cameras detected. Voice and text chat only.",
+                font=('Arial', 12, 'italic')
+            )
+            no_camera_label.pack(side=tk.TOP, pady=10)
 
         self.chat_frame = ttk.Frame(self.main_container)
         self.chat_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -133,13 +178,6 @@ class DualCameraGPTApp:
             font=('Arial', 10, 'bold')
         )
         self.status_label.pack(fill=tk.X, padx=5)
-
-        # Camera previews
-        self.preview1_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
-        self.preview1_canvas.pack(side=tk.LEFT, padx=5)
-
-        self.preview2_canvas = tk.Canvas(self.camera_frame, width=640, height=480)
-        self.preview2_canvas.pack(side=tk.LEFT, padx=5)
 
         # Create a frame for chat display and input
         chat_container = ttk.Frame(self.chat_frame)
@@ -212,12 +250,9 @@ class DualCameraGPTApp:
         # Keyboard shortcuts
         for widget in (self.master, self.chat_input):
             widget.bind('`', lambda e: self.toggle_recording())
-            #widget.bind('R', lambda e: self.toggle_recording())
-            #widget.bind('s', lambda e: self.handle_input())
-            #widget.bind('S', lambda e: self.handle_input())
             widget.bind('<Control-q>', lambda e: self.exit_program())
-            #widget.bind('E', lambda e: self.exit_program())
-    
+
+
 
     def on_model_change(self):
         """Handle AI model selection change"""
@@ -319,22 +354,25 @@ How can I help you today?
         self.chat_display.see(tk.END)
 
     def start_preview_threads(self):
-        self.preview_queue1 = queue.Queue()
-        self.preview_queue2 = queue.Queue()
-        
-        threading.Thread(
-            target=self.capture_preview_loop,
-            args=(self.picam1, self.preview_queue1, 1),
-            daemon=True
-        ).start()
-        
-        threading.Thread(
-            target=self.capture_preview_loop,
-            args=(self.picam2, self.preview_queue2, 2),
-            daemon=True
-        ).start()
-        
+        """Start preview threads for available cameras"""
+        if self.picam1:
+            self.preview_queue1 = queue.Queue()
+            threading.Thread(
+                target=self.capture_preview_loop,
+                args=(self.picam1, self.preview_queue1, 1),
+                daemon=True
+            ).start()
+            
+        if self.picam2:
+            self.preview_queue2 = queue.Queue()
+            threading.Thread(
+                target=self.capture_preview_loop,
+                args=(self.picam2, self.preview_queue2, 2),
+                daemon=True
+            ).start()
+            
         self.update_preview_canvases()
+
 
     def capture_preview_loop(self, camera, preview_queue, camera_num):
         while self.running:
@@ -348,23 +386,26 @@ How can I help you today?
                 print(f"Error capturing preview from camera {camera_num}: {e}")
             self.master.after(10)
 
-
+    
     def update_preview_canvases(self):
+        """Update preview canvases for available cameras"""
         try:
-            if not self.preview_queue1.empty():
+            if hasattr(self, 'preview_queue1') and not self.preview_queue1.empty():
                 photo1 = self.preview_queue1.get_nowait()
                 self.preview1_canvas.create_image(0, 0, anchor=tk.NW, image=photo1)
                 self.preview1_canvas.image = photo1
             
-            if not self.preview_queue2.empty():
+            if hasattr(self, 'preview_queue2') and not self.preview_queue2.empty():
                 photo2 = self.preview_queue2.get_nowait()
                 self.preview2_canvas.create_image(0, 0, anchor=tk.NW, image=photo2)
                 self.preview2_canvas.image = photo2
+                
         except Exception as e:
             print(f"Error updating preview canvases: {e}")
         
         if self.running:
             self.master.after(10, self.update_preview_canvases)
+
 
     def update_status(self, message):
         self.status_label.config(text=message)
@@ -398,14 +439,34 @@ How can I help you today?
         
 
         # Check if we need to capture from either camera
+        #image_path = None
+        #if "camera 1" in user_input.lower() or "front camera" in user_input.lower():
+        #    self.update_status("Processing image from Camera 1... Please wait.")
+        #    image_path = CameraManager.capture_and_convert(self.picam1, 1)
+        #elif "camera 2" in user_input.lower() or "rear camera" in user_input.lower():
+        #    self.update_status("Processing image from Camera 2... Please wait.")
+        #    image_path = CameraManager.capture_and_convert(self.picam2, 2)
+        
+        # Check if we need to capture from either camera
         image_path = None
-        if "camera 1" in user_input.lower() or "front camera" in user_input.lower():
+        if ("camera 1" in user_input.lower() or "front camera" in user_input.lower()) and self.picam1:
             self.update_status("Processing image from Camera 1... Please wait.")
             image_path = CameraManager.capture_and_convert(self.picam1, 1)
-        elif "camera 2" in user_input.lower() or "rear camera" in user_input.lower():
+        elif ("camera 2" in user_input.lower() or "rear camera" in user_input.lower()) and self.picam2:
             self.update_status("Processing image from Camera 2... Please wait.")
             image_path = CameraManager.capture_and_convert(self.picam2, 2)
-        
+        elif ("camera" in user_input.lower() or "camera 1" in user_input.lower() or 
+              "camera 2" in user_input.lower() or "front camera" in user_input.lower() or 
+              "rear camera" in user_input.lower()):
+            if not (self.picam1 or self.picam2):
+                self.insert_colored_message("system", "No cameras available. Please use voice or text chat only.")
+                return
+            elif not self.picam2 and ("camera 2" in user_input.lower() or "rear camera" in user_input.lower()):
+                self.insert_colored_message("system", "Only one camera available. Using Camera 1.")
+                self.update_status("Processing image from Camera 1... Please wait.")
+                image_path = CameraManager.capture_and_convert(self.picam1, 1)
+ 
+
         # Get response from GPT
         response = self.conversation_manager.get_response(
             user_input,

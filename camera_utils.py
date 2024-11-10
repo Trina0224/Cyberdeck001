@@ -7,10 +7,42 @@ from pathlib import Path
 
 class CameraManager:
     @staticmethod
+    def detect_cameras() -> list:
+        """
+        Detect available cameras in the system
+        Returns:
+            list: List of available camera indices
+        """
+        available_cameras = []
+        try:
+            # Try to detect Camera 1
+            try:
+                cam = Picamera2(0)
+                cam.close()
+                available_cameras.append(0)
+                print("[DEBUG] Camera 1 detected")
+            except Exception as e:
+                print(f"[DEBUG] Camera 1 not available: {e}")
+
+            # Try to detect Camera 2
+            try:
+                cam = Picamera2(1)
+                cam.close()
+                available_cameras.append(1)
+                print("[DEBUG] Camera 2 detected")
+            except Exception as e:
+                print(f"[DEBUG] Camera 2 not available: {e}")
+
+            return available_cameras
+        except Exception as e:
+            print(f"[DEBUG] Error detecting cameras: {e}")
+            return []
+
+    @staticmethod
     def setup_camera(camera_num: int) -> Picamera2:
-        camera = Picamera2(camera_num=camera_num)
+        """Setup camera with specified number"""
+        camera = Picamera2(camera_num)
         
-        # Configure preview and main streams properly
         preview_config = {
             "size": (640, 480),
             "format": "XBGR8888"
@@ -21,15 +53,15 @@ class CameraManager:
             "format": "XBGR8888"
         }
         
-        # Create configuration with both preview and still capture settings
         camera_config = camera.create_preview_configuration(
-            main=still_config,  # For still capture
-            lores=preview_config  # For preview
+            main=still_config,
+            lores=preview_config
         )
         
         camera.configure(camera_config)
         camera.start()
         return camera
+
 
     @staticmethod
     def capture_high_res(camera: Picamera2, camera_num: int) -> str:
