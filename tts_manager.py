@@ -20,7 +20,16 @@ class TTSManager:
         self.current_thread = None
         self.current_audio_path = None
         self._lock = threading.Lock()
-    
+   
+        # Define voice mapping for different AI models
+        self.voice_mapping = {
+            'ChatGPT': 'nova',      # Default friendly voice
+            'Claude': 'alloy',      # More professional, balanced voice
+            'Gemini': 'onyx',    # Deep, resonant voice 
+            'Grok': 'shimmer',         # Bright, energetic voice
+            'default': 'nova'       # Fallback voice
+        }
+
     def _load_api_key(self, filepath: str) -> str:
         """
         Load the OpenAI API key from file.
@@ -35,14 +44,18 @@ class TTSManager:
         except FileNotFoundError:
             raise Exception(f"API key file not found at {filepath}")
     
-    def text_to_speech(self, text: str, language: str = "en", 
-                      status_callback: Callable[[str], None] = None) -> None:
+    def text_to_speech(self, 
+                      text: str, 
+                      language: str = "en",
+                      status_callback: Callable[[str], None] = None,
+                      model_name: str = "ChatGPT") -> None:
         """
-        Convert text to speech and play it.
+        Convert text to speech using model-specific voice.
         Args:
             text (str): Text to convert to speech
             language (str): Language code ('en', 'ja', 'zh')
             status_callback: Callback function to update status
+            model_name (str): Name of the AI model for voice selection
         """
         if status_callback:
             status_callback("Generating speech...")
@@ -54,12 +67,8 @@ class TTSManager:
         output_path = Path("/tmp") / f"tts_{os.getpid()}_{int(time.time()*1000)}.mp3"
         
         try:
-            # Select voice based on language
-            voice = "nova"  # Default voice
-            if language == "ja":
-                voice = "nova"
-            elif language == "zh":
-                voice = "nova"
+            # Select voice based on model and language
+            voice = self.voice_mapping.get(model_name, self.voice_mapping['default'])
             
             # Generate speech
             with self.client.audio.speech.with_streaming_response.create(
@@ -90,6 +99,8 @@ class TTSManager:
                     os.remove(output_path)
                 except Exception as e:
                     print(f"Error removing temporary file: {e}")
+
+
     
     def _play_audio(self, audio_path: Path, 
                     status_callback: Callable[[str], None] = None) -> None:

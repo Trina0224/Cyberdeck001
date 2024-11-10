@@ -249,7 +249,8 @@ class ConversationManager:
             self.tts_manager.text_to_speech(
                 response,
                 language,
-                status_callback
+                status_callback,
+                model_name=self.current_model.get_model_name()  # Pass the model name
             )
 
             return response

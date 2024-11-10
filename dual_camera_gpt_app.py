@@ -113,6 +113,7 @@ class DualCameraGPTApp:
     #    except Exception as e:
     #        print(f"Error setting up cameras: {e}")
     
+    
     def create_ui(self):
         # Create horizontal container for main content and model selection
         self.horizontal_container = ttk.Frame(self.master)
@@ -122,9 +123,13 @@ class DualCameraGPTApp:
         self.main_container = ttk.Frame(self.horizontal_container)
         self.main_container.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        # Create model selection frame on the right
-        self.model_frame = ttk.LabelFrame(self.horizontal_container, text="AI Model")
-        self.model_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+        # Create right side control panel
+        self.control_panel = ttk.Frame(self.horizontal_container)
+        self.control_panel.pack(side=tk.RIGHT, fill=tk.Y, padx=5, pady=5)
+
+        # Create model selection frame in control panel
+        self.model_frame = ttk.LabelFrame(self.control_panel, text="AI Model")
+        self.model_frame.pack(fill=tk.X, padx=5, pady=5)
 
         # Add radio buttons for model selection
         self.model_var = tk.StringVar(value="ChatGPT")  # Default selection
@@ -140,10 +145,47 @@ class DualCameraGPTApp:
             )
             radio.pack(padx=5, pady=2, anchor=tk.W)
 
+        # Add control buttons under the model selection
+        self.button_frame = ttk.LabelFrame(self.control_panel, text="Controls")
+        self.button_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        # Style for the buttons
+        button_style = ttk.Style()
+        button_style.configure('Tall.TButton', padding=(5, 10))
+
+        # Record button (keeping as tk.Button for color support)
+        self.record_button = tk.Button(
+            self.button_frame,
+            text="Record (`)",
+            command=self.toggle_recording,
+            relief=tk.RAISED,
+            bg='light gray',
+            activebackground='gray'
+        )
+        self.record_button.pack(fill=tk.X, padx=5, pady=5, ipady=10)
+
+        # Send button
+        self.send_button = ttk.Button(
+            self.button_frame,
+            text="Send",
+            command=self.handle_input,
+            style='Tall.TButton'
+        )
+        self.send_button.pack(fill=tk.X, padx=5, pady=5, ipady=10)
+
+        # Exit button
+        self.exit_button = ttk.Button(
+            self.button_frame,
+            text="Exit (ctrl+Q)",
+            command=self.exit_program,
+            style='Tall.TButton'
+        )
+        self.exit_button.pack(fill=tk.X, padx=5, pady=5, ipady=10)
+
         # Create font size control frame
         self.create_font_control()
 
-        # Create frames for organization
+        # Create camera frames based on availability
         if self.picam1 or self.picam2:
             self.camera_frame = ttk.Frame(self.main_container)
             self.camera_frame.pack(side=tk.TOP, fill=tk.X)
@@ -168,6 +210,7 @@ class DualCameraGPTApp:
             )
             no_camera_label.pack(side=tk.TOP, pady=10)
 
+        # Create chat frame
         self.chat_frame = ttk.Frame(self.main_container)
         self.chat_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
@@ -179,7 +222,7 @@ class DualCameraGPTApp:
         )
         self.status_label.pack(fill=tk.X, padx=5)
 
-        # Create a frame for chat display and input
+        # Create chat container
         chat_container = ttk.Frame(self.chat_frame)
         chat_container.pack(fill=tk.BOTH, expand=True)
 
@@ -188,11 +231,12 @@ class DualCameraGPTApp:
         chat_container.grid_rowconfigure(0, weight=1)
         chat_container.grid_rowconfigure(1, weight=0)
 
-        # Chat display with font settings
+        # Chat display with reduced height
         self.chat_display = scrolledtext.ScrolledText(
             chat_container,
             wrap=tk.WORD,
-            font=self.chat_font
+            font=self.chat_font,
+            height=10  # Shows approximately 10 lines
         )
         self.chat_display.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
 
@@ -202,7 +246,6 @@ class DualCameraGPTApp:
 
         # Configure input frame grid
         self.input_frame.grid_columnconfigure(0, weight=1)
-        self.input_frame.grid_columnconfigure(1, weight=0)
 
         # Chat input
         self.chat_input = ttk.Entry(
@@ -210,37 +253,6 @@ class DualCameraGPTApp:
             font=self.chat_font
         )
         self.chat_input.grid(row=0, column=0, sticky='ew')
-
-        # Button frame
-        self.button_frame = ttk.Frame(self.input_frame)
-        self.button_frame.grid(row=0, column=1, sticky='e', padx=(5, 0))
-
-        # Record button
-        self.record_button = tk.Button(
-            self.button_frame,
-            text="Record (`)",
-            command=self.toggle_recording,
-            relief=tk.RAISED,
-            width=8,
-            bg='light gray',
-            activebackground='gray'
-        )
-        self.record_button.pack(side=tk.LEFT, padx=2)
-
-        # Send and Exit buttons
-        self.send_button = ttk.Button(
-            self.button_frame,
-            text="Send",
-            command=self.handle_input
-        )
-        self.send_button.pack(side=tk.LEFT, padx=2)
-
-        self.exit_button = ttk.Button(
-            self.button_frame,
-            text="Exit (ctrl+Q)",
-            command=self.exit_program
-        )
-        self.exit_button.pack(side=tk.LEFT, padx=2)
 
         # Bind keys
         self.chat_input.bind("<Return>", lambda e: self.handle_input())
@@ -251,7 +263,6 @@ class DualCameraGPTApp:
         for widget in (self.master, self.chat_input):
             widget.bind('`', lambda e: self.toggle_recording())
             widget.bind('<Control-q>', lambda e: self.exit_program())
-
 
 
     def on_model_change(self):
@@ -310,12 +321,27 @@ class DualCameraGPTApp:
         self.chat_display.configure(font=self.chat_font)
         self.chat_input.configure(font=self.chat_font)
         
+        
+        # Adjust chat display height - maintain about 10 lines of text
+        # As font gets bigger, reduce number of lines to maintain reasonable height
+        if new_size <= 12:
+            display_height = 10
+        elif new_size <= 16:
+            display_height = 8
+        elif new_size <= 20:
+            display_height = 6
+        else:
+            display_height = 5
+  
+
         # Adjust chat display height based on font size
         # This helps maintain the input area visibility
-        base_height = 20  # Base height for font size 12
-        adjusted_height = max(10, int(base_height * (12 / new_size)))  # Minimum height of 10
-        self.chat_display.configure(height=adjusted_height)
+        #base_height = 20  # Base height for font size 12
+        #adjusted_height = max(10, int(base_height * (12 / new_size)))  # Minimum height of 10
         
+        #self.chat_display.configure(height=adjusted_height)
+        self.chat_display.configure(height=display_height)
+
         # Force update of the display
         self.master.update_idletasks()
 
@@ -338,20 +364,27 @@ class DualCameraGPTApp:
         welcome_message = """Welcome! I'm your AI assistant. I can help you with questions in English, Japanese, Chinese, 
 and particularly with topics related to Christianity and the Bible.
 
-I can analyze images from two cameras - just mention 'camera 1' or 'camera 2' in your question.
+Camera Commands:
+- "what is this?" - Analyze image from Camera 2 (rear camera)
+- "what is that?" - Analyze image from Camera 1 (front camera)
+- "camera 1" or "front camera" - Analyze image from Camera 1
+- "camera 2" or "rear camera" - Analyze image from Camera 2
+- "take photo" - Take a high-resolution photo (saves to Pictures folder)
+
+Other Commands:
 Type 'quit', 'exit', or 'bye' to end the program, or use the Exit button.
 
 Keyboard shortcuts:
 ` (Backtick) - Toggle Recording
 Enter/Return - Send Message
 Ctrl+Q  - Exit Program
-
-Esc - Stop GPT's talking.
+Esc - Stop GPT's talking
 
 How can I help you today?
 """
         self.chat_display.insert(tk.END, welcome_message)
         self.chat_display.see(tk.END)
+
 
     def start_preview_threads(self):
         """Start preview threads for available cameras"""
