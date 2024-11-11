@@ -1,40 +1,48 @@
+# Introduction
+
+This Python GUI program allows users to interact with ChatGPT, Claude, Gemini, Grok, and Perplexity. You can ask ChatGPT, Claude, and Gemini to capture and analyze images from two connected cameras. As ChatGPT, Claude, Gemini, and Grok lack built-in online search capabilities, Perplexity has been integrated for this function. The system can call on Perplexity for support when necessary, not only for interaction but also for search tasks.
+
+The program enables these AI models to request an online search by generating `{"Online Search": "xxxx"}`. This command prompts Perplexity to perform the search and relay the results back to the requesting AI. Additionally, the models can interact with the cameras using the command `{"Camera": "1 or 2"}`.
+
 # Cyberdeck001 Setup Guide
 
 ## Initial Setup
 
-1. Create a file named `openai_key.txt` in the working directory.
-2. Paste your OpenAI API key into `openai_key.txt`.  
-3. For Claude, create a new file called `anthropic_key.txt` and paste the key into it.  
-4. For Gemini, create a new file named `google_key.txt` and paste the key into it.  
+1. Create a file named `openai_key.txt` in the project directory and paste your OpenAI API key into it.
+2. Create a file named `anthropic_key.txt` for Claude and add your API key.
+3. For Gemini, create `google_key.txt` and paste the API key into it.
+4. For Perplexity, create `perplexity_key.txt` and include the API key.
 
-## Requirements  
-(--break-system-packages may need, if no virtual env. )  
+## Requirements
 
-```bash  
-pip install -r requirements.txt  
-```  
-  
-If you would like to have the exactlly reversions I am using:  
-  
-```bash  
-pip install -r requirements_fix.txt  
-```  
+(Use `--break-system-packages` if not using a virtual environment)
 
-Somehthing you may need to install:  
+```bash
+pip install -r requirements.txt
+```
 
-```bash  
-# For Debian/Ubuntu
+To use the exact package versions:
+
+```bash
+pip install -r requirements_fix.txt
+```
+
+### Additional Dependencies
+
+For Debian/Ubuntu systems, run the following:
+
+```bash
 sudo apt-get update
 sudo apt-get install -y \
     python3-tk \
     portaudio19-dev \
     python3-pil.imagetk
-```  
-
+```
 
 ## Running the Program
 
-Run the following command to start the program:
+To start the program, use the command:
+
 ```bash
 python main.py
 ```
@@ -42,28 +50,28 @@ python main.py
 ## Hardware Requirements
 
 1. **Raspberry Pi 5**  
-   - Recommended for use with dual cameras.  
-   - Alternatively, you can use a Raspberry Pi 4 with a USB camera or modify the code to use a single camera.
+   - Recommended for dual-camera usage.
+   - Alternatively, a Raspberry Pi 4 can be used with a USB camera, or the code can be modified for single-camera use.
 2. **HDMI Output**
 3. **Audio Device**  
-   - A USB-to-speaker + MIC dongle (or separate dongles).
+   - USB-to-speaker + MIC dongle or separate audio input/output dongles.
    - Compatible audio shields or gloves can also be used.
 
 ## Known Issues
 
-1. ~~Incorrect color rendering in the outputs of both cameras.~~
-2. Basic GUI design, which may affect the user experience.
-3. Keyboard shortcuts, if focuse on input-box, the shortcuts are not working.  
-4. ~~Package list.~~  
+1. ~~Color rendering issues with both camera outputs.~~
+2. Basic GUI design that may impact user experience.
+3. Keyboard shortcuts do not work when the input box is focused.
+4. ~~Incomplete package list.~~
 
-## Release Info  
-v0.5.0  It's a full function chat Interface and only support chatGPT.  
+## Release Information
 
-## Models  
-OpenAI:  gpt-4o-mini, gpt-4o  
-Claude:  claude-3-5-sonnet-20241022  
-Gemini:  gemini-1.5-flash  
-Grok:  grok-demo  (Released on Nov/04th/2024, image support will be released later. No python lib required.)
+**v0.5.0**: Fully functional chat interface supporting only ChatGPT.
 
+## Models
 
-
+- **OpenAI**: `gpt-4o-mini`, `gpt-4o`
+- **Claude**: `claude-3-5-sonnet-20241022`
+- **Gemini**: `gemini-1.5-flash`
+- **Grok**: `grok-demo` (Released Nov 4, 2024; image support to be released. No additional Python libraries required.)
+- **Perplexity**: `llama-3.1-sonar-large-128k-online`  
