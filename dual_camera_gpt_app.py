@@ -133,7 +133,7 @@ class DualCameraGPTApp:
 
         # Add radio buttons for model selection
         self.model_var = tk.StringVar(value="ChatGPT")  # Default selection
-        models = ["ChatGPT", "Claude", "Gemini", "Grok"]
+        models = ["ChatGPT", "Claude", "Gemini", "Grok", "Perplexity"]
 
         for model in models:
             radio = ttk.Radiobutton(

@@ -13,6 +13,7 @@ from pathlib import Path
 from key_manager import KeyManager
 from chatgpt import ChatGPTModel
 from typing import Union
+from system_prompts import SystemPrompts
 
 class ConversationManager:
     def __init__(self, api_key_path: str = "openai_key.txt"):
@@ -24,6 +25,10 @@ class ConversationManager:
         # Initialize current AI model (default to ChatGPT)
         self.current_model = ChatGPTModel()
 
+        # Initialize Perplexity model for searches
+        from perplexity import PerplexityModel
+        self.search_model = PerplexityModel()
+
         # Initialize camera references
         self.camera1 = None
         self.camera2 = None
@@ -33,18 +38,26 @@ class ConversationManager:
             "camera2": "camera2.jpg"
         }
         
-        self.conversation_history: List[Dict] = [
+        # Initialize conversation history with system prompt
+        self.conversation_history = [
             {
                 "role": "system",
-                "content": """You are a knowledgeable female assistant with expertise in Japanese, 
-                English, Chinese, Christianity, and Biblical studies. You can also analyze images 
-                from two cameras. When asked about 'camera 1' or 'front camera', you'll analyze 
-                the front view image. When asked about 'camera 2' or 'rear camera', you'll analyze 
-                the rear view image. Please provide helpful and accurate responses for daily life 
-                questions and image analysis. Maintain conversation context and provide responses 
-                in the same language as the user's query."""
+                "content": SystemPrompts.get_prompt("ChatGPT")  # Default to ChatGPT prompt
             }
         ]
+
+        #self.conversation_history: List[Dict] = [
+        #    {
+        #        "role": "system",
+        #        "content": """You are a knowledgeable female assistant with expertise in Japanese, 
+        #        English, Chinese, Christianity, and Biblical studies. You can also analyze images 
+        #        from two cameras. When asked about 'camera 1' or 'front camera', you'll analyze 
+        #        the front view image. When asked about 'camera 2' or 'rear camera', you'll analyze 
+        #        the rear view image. Please provide helpful and accurate responses for daily life 
+        #        questions and image analysis. Maintain conversation context and provide responses 
+        #        in the same language as the user's query."""
+        #    }
+        #]
 
         # Add command patterns for different languages
         self.photo_commands = {
@@ -81,6 +94,12 @@ class ConversationManager:
         """Change the current AI model"""
         try:
             print(f"[DEBUG] Attempting to switch to {model_name}")
+            
+            # Update system prompt for new model
+            if self.conversation_history:
+                self.conversation_history[0]["content"] = SystemPrompts.get_prompt(model_name)
+ 
+
             if model_name == "ChatGPT":
                 self.current_model = ChatGPTModel()
                 print(f"[DEBUG] Created new ChatGPT model instance: {type(self.current_model)}")
@@ -99,9 +118,15 @@ class ConversationManager:
                 self.current_model = GrokModel()
                 self.clear_history()
                 print(f"[DEBUG] Created new Grok model instance: {type(self.current_model)}")
+            elif model_name == "Perplexity":
+                from perplexity import PerplexityModel
+                self.current_model = PerplexityModel()
+                self.clear_history()
+                print(f"[DEBUG] Created new Perplexity model instance: {type(self.current_model)}")
             else:
                 raise ValueError(f"Unsupported model: {model_name}")
-
+            
+            #self.clear_history()
             print(f"[DEBUG] Current model after switch: {self.current_model.get_model_name()}")
         except Exception as e:
             print(f"[DEBUG] Error during model switch: {str(e)}")
@@ -187,18 +212,22 @@ class ConversationManager:
 
 
     def get_response(self, user_input: str, status_callback: Callable[[str], None] = None) -> str:
+        """
+        Generate a response incorporating camera analysis, online searches, and TTS
+        Args:
+            user_input: The user's input text
+            status_callback: Optional callback function to update UI status
+        Returns:
+            str: The generated response
+        """
         try:
-            
-            print(f"[DEBUG] Current model before getting response: {self.current_model.get_model_name()}")
-            print(f"[DEBUG] Current model type: {type(self.current_model)}")
-
             print(f"[DEBUG] Processing input: {user_input}")
             command_type, camera_num = self.parse_command(user_input)
             print(f"[DEBUG] Parsed command: type={command_type}, camera={camera_num}")
             image_path = None
 
+            # Handle user's direct camera commands first
             if command_type == 'take_photo':
-                # Just take and save high-res photo, no AI analysis
                 if camera_num == '1' and self.camera1:
                     filepath = CameraManager.capture_high_res(self.camera1, 1)
                 elif camera_num == '2' and self.camera2:
@@ -211,7 +240,6 @@ class ConversationManager:
                 return "Error taking photo"
 
             elif command_type == 'analyze':
-                # Take photo and analyze
                 if camera_num == '1' and self.camera1:
                     image_path = CameraManager.capture_and_convert(self.camera1, 1)
                 elif camera_num == '2' and self.camera2:
@@ -219,46 +247,174 @@ class ConversationManager:
                 else:
                     return "Error: Camera not initialized"
 
-            # Add message to conversation history
+            # Add initial user message to conversation history
             if image_path:
                 self.add_message("user", user_input, image_path)
             else:
                 self.add_message("user", user_input)
 
-            # Determine which model to use based on the current AI model
+            # Determine model
             if isinstance(self.current_model, ChatGPTModel):
                 model = "gpt-4o-mini" if image_path else "gpt-4o"
                 print(f"[DEBUG] Using ChatGPT model: {model}")
             else:
-                # Other models don't use the same model names
                 model = None
                 print(f"[DEBUG] Using {self.current_model.get_model_name()} with its own model naming")
-            # Get response from current AI model
-            print(f"[DEBUG] Generating response using {self.current_model.get_model_name()}")
-            response = self.current_model.generate_response(
+
+            # Get initial response from current AI model
+            print(f"[DEBUG] Generating initial response using {self.current_model.get_model_name()}")
+            initial_response = self.current_model.generate_response(
                 self.conversation_history,
                 model,
                 image_path
             )
 
-            # Add response to conversation history
-            self.add_message("assistant", response)
+            # Check for AI-initiated camera commands in the response
+            camera_pattern = r'{"camera": ?"(\d)"}'
+            camera_match = re.search(camera_pattern, initial_response)
+            
+            if camera_match:
+                camera_num = camera_match.group(1)
+                print(f"[DEBUG] Found camera command: camera {camera_num}")
+                
+                if status_callback:
+                    status_callback(f"Capturing image from camera {camera_num}...")
 
-            # Handle text-to-speech
-            language = self.detect_language(response)
+                # Handle AI's camera command
+                if camera_num == "1" and self.camera1:
+                    image_path = CameraManager.capture_and_convert(self.camera1, 1)
+                elif camera_num == "2" and self.camera2:
+                    image_path = CameraManager.capture_and_convert(self.camera2, 2)
+                else:
+                    return "Error: Requested camera not initialized"
+
+                if image_path:
+                    # Add AI's intermediate response and image to conversation
+                    self.add_message("assistant", "Let me analyze that image.", None)
+                    self.add_message("user", "Please analyze this image.", image_path)
+
+                    # Get new response with image analysis
+                    print("[DEBUG] Generating response with image analysis")
+                    final_response = self.current_model.generate_response(
+                        self.conversation_history,
+                        model,
+                        image_path
+                    )
+
+                    # Add final response to history
+                    self.add_message("assistant", final_response)
+
+                    # Handle TTS
+                    language = self.detect_language(final_response)
+                    self.tts_manager.text_to_speech(
+                        final_response,
+                        language,
+                        status_callback,
+                        model_name=self.current_model.get_model_name()
+                    )
+
+                    if status_callback:
+                        status_callback("")
+
+                    return final_response
+                return "Error capturing image"
+
+            # Check for search requests in the response
+            search_pattern = r'{"Online search": "([^"]+)"}'
+            search_match = re.search(search_pattern, initial_response)
+            
+            if search_match:
+                search_query = search_match.group(1)
+                print(f"[DEBUG] Found search request: {search_query}")
+                
+                if status_callback:
+                    status_callback(f"Searching for: {search_query}")
+
+                try:
+                    # Perform search using Perplexity
+                    search_messages = [
+                        {
+                            "role": "system",
+                            "content": "You are a helpful search assistant. Provide accurate and concise information."
+                        },
+                        {
+                            "role": "user",
+                            "content": search_query
+                        }
+                    ]
+
+                    search_result = self.search_model.generate_response(
+                        search_messages,
+                        "llama-3.1-sonar-large-128k-online",
+                        None
+                    )
+                    print(f"[DEBUG] Search result from Perplexity: {search_result}")
+
+                    # Create a new user message with search results
+                    combined_input = f"""Original query: {user_input}
+
+Search results for "{search_query}":
+{search_result}
+
+Please provide a complete response incorporating this information."""
+
+                    # Add search results to conversation
+                    self.add_message("user", combined_input)
+
+                    # Get final response incorporating search results
+                    print("[DEBUG] Generating final response with search results")
+                    final_response = self.current_model.generate_response(
+                        self.conversation_history,
+                        model,
+                        image_path
+                    )
+
+                    # Add final response to history
+                    self.add_message("assistant", final_response)
+
+                    # Handle TTS for final response
+                    language = self.detect_language(final_response)
+                    self.tts_manager.text_to_speech(
+                        final_response,
+                        language,
+                        status_callback,
+                        model_name=self.current_model.get_model_name()
+                    )
+
+                    if status_callback:
+                        status_callback("")
+
+                    return final_response
+
+                except Exception as e:
+                    print(f"[DEBUG] Search error: {e}")
+                    error_msg = f"I encountered an error while searching: {str(e)}"
+                    if status_callback:
+                        status_callback(error_msg)
+                    return error_msg
+
+            # No special commands, handle normal response
+            print("[DEBUG] No special commands found, processing normal response")
+            self.add_message("assistant", initial_response)
+            
+            # Handle TTS
+            language = self.detect_language(initial_response)
             self.tts_manager.text_to_speech(
-                response,
+                initial_response,
                 language,
                 status_callback,
-                model_name=self.current_model.get_model_name()  # Pass the model name
+                model_name=self.current_model.get_model_name()
             )
 
-            return response
+            if status_callback:
+                status_callback("")
+
+            return initial_response
 
         except Exception as e:
             print(f"[DEBUG] Error in get_response: {str(e)}")
-            error_message = f"Error: {str(e)}"
+            error_msg = f"Error: {str(e)}"
             if status_callback:
-                status_callback(error_message)
-            return error_message
+                status_callback(error_msg)
+            return error_msg
 

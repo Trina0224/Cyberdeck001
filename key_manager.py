@@ -9,7 +9,8 @@ class KeyManager:
         "openai": "openai_key.txt",
         "anthropic": "anthropic_key.txt",
         "google": "google_key.txt",
-        "x": "x_key.txt"
+        "x": "x_key.txt",
+        "perplexity": "perplexity_key.txt"
     }
     
     @staticmethod

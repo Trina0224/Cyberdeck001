@@ -27,6 +27,7 @@ class TTSManager:
             'Claude': 'alloy',      # More professional, balanced voice
             'Gemini': 'onyx',    # Deep, resonant voice 
             'Grok': 'shimmer',         # Bright, energetic voice
+            'Perplexity': 'echo',  # Or any other appropriate voice
             'default': 'nova'       # Fallback voice
         }
 
