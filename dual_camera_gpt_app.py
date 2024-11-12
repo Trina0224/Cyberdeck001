@@ -20,6 +20,8 @@ class DualCameraGPTApp:
     def __init__(self, master):
         self.master = master
         master.title("Dual Camera GPT Interface")
+        self.input_focus_timer = None
+        self.is_input_focused = False
        
         # Initialize converter before other components
         self.converter = opencc.OpenCC('s2t')
@@ -259,10 +261,67 @@ class DualCameraGPTApp:
         self.chat_input.bind("<Up>", self.handle_up_key)
         self.chat_input.bind("<Down>", self.handle_down_key)
 
+        self.chat_input.bind("<FocusIn>", self.on_input_focus)
+        self.chat_input.bind("<FocusOut>", self.on_input_unfocus)
+        self.chat_input.bind("<Key>", self.reset_focus_timer)
+
         # Keyboard shortcuts
         for widget in (self.master, self.chat_input):
             widget.bind('`', lambda e: self.toggle_recording())
             widget.bind('<Control-q>', lambda e: self.exit_program())
+
+    def on_input_focus(self, event=None):
+        """Handle input focus event"""
+        self.is_input_focused = True
+        self.start_focus_timer()
+        print("[DEBUG] Input focused")
+
+    def on_input_unfocus(self, event=None):
+        """Handle input unfocus event"""
+        self.is_input_focused = False
+        if self.input_focus_timer:
+            self.master.after_cancel(self.input_focus_timer)
+            self.input_focus_timer = None
+        print("[DEBUG] Input unfocused")
+
+    def reset_focus_timer(self, event=None):
+        """Reset the focus timer when user types or clicks buttons"""
+        if event.keysym != 'grave':  # Don't reset for backtick key
+            self.start_focus_timer()
+
+    def start_focus_timer(self):
+        """Start or restart the focus timer"""
+        if self.input_focus_timer:
+            self.master.after_cancel(self.input_focus_timer)
+        self.input_focus_timer = self.master.after(3000, self.auto_unfocus)
+        print("[DEBUG] Focus timer started/reset")
+
+    def auto_unfocus(self):
+        """Automatically unfocus the input after timer expires"""
+        self.is_input_focused = False
+        self.input_focus_timer = None
+        self.master.focus_set()  # Move focus to main window
+        print("[DEBUG] Auto unfocused due to timer")
+
+    def handle_backtick(self, event):
+        """Handle backtick key press"""
+        if not self.is_input_focused:
+            self.toggle_recording()
+            return "break"  # Prevent the backtick from appearing in input
+        return None  # Allow backtick in input when focused
+
+    def handle_input(self):
+        """Modified handle_input method"""
+        user_input = self.chat_input.get().strip()
+        if not user_input:
+            return
+        
+        # Reset focus after sending message
+        self.is_input_focused = False
+        if self.input_focus_timer:
+            self.master.after_cancel(self.input_focus_timer)
+            self.input_focus_timer = None
+
 
 
     def on_model_change(self):
