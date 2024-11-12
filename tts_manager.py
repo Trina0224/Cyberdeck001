@@ -47,7 +47,7 @@ class TTSManager:
     
     def text_to_speech(self, 
                       text: str, 
-                      language: str = "en",
+                      #language: str = "en",
                       status_callback: Callable[[str], None] = None,
                       model_name: str = "ChatGPT") -> None:
         """

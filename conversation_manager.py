@@ -308,7 +308,7 @@ class ConversationManager:
                     language = self.detect_language(final_response)
                     self.tts_manager.text_to_speech(
                         final_response,
-                        language,
+                        #language,
                         status_callback,
                         model_name=self.current_model.get_model_name()
                     )
@@ -376,7 +376,7 @@ Please provide a complete response incorporating this information."""
                     language = self.detect_language(final_response)
                     self.tts_manager.text_to_speech(
                         final_response,
-                        language,
+                        #language,
                         status_callback,
                         model_name=self.current_model.get_model_name()
                     )
@@ -401,7 +401,7 @@ Please provide a complete response incorporating this information."""
             language = self.detect_language(initial_response)
             self.tts_manager.text_to_speech(
                 initial_response,
-                language,
+                #language,
                 status_callback,
                 model_name=self.current_model.get_model_name()
             )
